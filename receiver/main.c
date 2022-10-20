@@ -1,9 +1,9 @@
 /**
  * compile this file with:
  *
- * -lwiringPi -lz
+ * -lz
  */
-#include <wiringPi.h> // pinMode, digitalRead
+#include "../MMIO/MMIO.h"
 
 #include <stdbool.h> // bool
 #include <stdlib.h> // exit
@@ -15,8 +15,8 @@
 
 #include <time.h> // clock_gettime, struct timespec
 
-#define RECEIVE_CLOCK_PIN   0
-#define RECEIVE_DATA_PIN    2
+#define RECEIVE_CLOCK_PIN   17
+#define RECEIVE_DATA_PIN    27
 
 #define ONE_SECOND_IN_MICROS 1000000L
 #define CLOCK_LOW_IN_MICROS  95000L   // 95ms
@@ -55,15 +55,19 @@ void error(const char *msg, ...) {
 	exit(1);
 }
 
+raspi_information info;
+
 void initIO(void) {
 	debug("initializing I/O");
 
-	if (wiringPiSetup() == -1) {
+	if (!MMIO_getDeviceInfo(&info)) {
 		error("failed to initialize I/O");
 	}
 
-	pinMode(RECEIVE_CLOCK_PIN, INPUT);
-	pinMode(RECEIVE_DATA_PIN, INPUT);
+	MMIO_open(info.phy_base_addr);
+
+	MMIO_setGPIODirection(RECEIVE_CLOCK_PIN, false);
+	MMIO_setGPIODirection(RECEIVE_DATA_PIN, false);
 
 	debug("pin %d = clock", RECEIVE_CLOCK_PIN);
 	debug("pin %d = data", RECEIVE_DATA_PIN);
@@ -139,8 +143,8 @@ int main(int argc, const char **argv) {
 
 	while (true) {
 		// read I/O pins
-		g_clk_pin = digitalRead(RECEIVE_CLOCK_PIN);
-		g_data_pin = digitalRead(RECEIVE_DATA_PIN);
+		g_clk_pin = MMIO_readGPIOValue(RECEIVE_CLOCK_PIN);
+		g_data_pin = MMIO_readGPIOValue(RECEIVE_DATA_PIN);
 
 		switch (g_current_state) {
 			case STATE_IDLE: {

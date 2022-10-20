@@ -1,9 +1,9 @@
 /**
  * compile this file with:
  *
- * -lwiringPi -lz
+ * -lz
  */
-#include <wiringPi.h> // pinMode, digitalRead
+#include "../MMIO/MMIO.h"
 #include <zlib.h> // crc32
 
 #include <stdbool.h> // bool
@@ -14,8 +14,8 @@
 #include <stdio.h> // vfprintf()
 #include <stdarg.h> // va_list
 
-#define TRANSMIT_CLOCK_PIN   0
-#define TRANSMIT_DATA_PIN    2
+#define TRANSMIT_CLOCK_PIN   17
+#define TRANSMIT_DATA_PIN    27
 
 void debug(const char *msg, ...) {
 	va_list args;
@@ -46,15 +46,19 @@ void error(const char *msg, ...) {
 	exit(1);
 }
 
+raspi_information info;
+
 void initIO(void) {
 	debug("initializing I/O");
 
-	if (wiringPiSetup() == -1) {
+	if (!MMIO_getDeviceInfo(&info)) {
 		error("failed to initialize I/O");
 	}
 
-	pinMode(TRANSMIT_CLOCK_PIN, OUTPUT);
-	pinMode(TRANSMIT_DATA_PIN, OUTPUT);
+	MMIO_open(info.phy_base_addr);
+
+	MMIO_setGPIODirection(TRANSMIT_CLOCK_PIN, true);
+	MMIO_setGPIODirection(TRANSMIT_DATA_PIN, true);
 
 	debug("pin %d = clock", TRANSMIT_CLOCK_PIN);
 	debug("pin %d = data", TRANSMIT_DATA_PIN);
@@ -65,9 +69,9 @@ void initIO(void) {
 static void putDataBit(bool bit, bool clk_val) {
 	usleep(4E3);
 
-	digitalWrite(TRANSMIT_DATA_PIN, bit);
+	MMIO_writeGPIOValue(TRANSMIT_DATA_PIN, bit);
 	usleep(1E3);
-	digitalWrite(TRANSMIT_CLOCK_PIN, clk_val);
+	MMIO_writeGPIOValue(TRANSMIT_CLOCK_PIN, clk_val);
 }
 
 /**
@@ -79,9 +83,9 @@ static void sendBits(bool v1, bool v2) {
 }
 
 static void sendByte(uint8_t byte) {
-	digitalWrite(TRANSMIT_CLOCK_PIN, 1);
+	MMIO_writeGPIOValue(TRANSMIT_CLOCK_PIN, 1);
 	usleep(1E3);
-	digitalWrite(TRANSMIT_CLOCK_PIN, 0);
+	MMIO_writeGPIOValue(TRANSMIT_CLOCK_PIN, 0);
 	usleep(100E3);
 
 	for (int i = 0; i < 8; ++i) {
@@ -101,7 +105,7 @@ static void sendPacket(const char *str) {
 	// calculate CRC32 of packet..
 	uint32_t packet_crc32 = crc32(0L, Z_NULL, 0);
 
-	packet_crc32 = crc32(packet_crc32, str, strlen(str));
+	packet_crc32 = crc32(packet_crc32, (void *)str, strlen(str));
 
 	// packet start byte
 	sendByte(0xae);
